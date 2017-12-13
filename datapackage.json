@@ -225,6 +225,20 @@
        "Variable": ["Occupied Housing Units", "Margins of Error"]     
      },
      {
+       "Measure Type": ["Percent of Total Housing Units"], 
+       "Race/Ethnicity": ["American Indian and Alaska Native Alone",   
+                     "Asian Alone",                                
+                     "Black or African American Alone",           
+                     "Hispanic or Latino",                         
+                     "Native Hawaiian and Other Pacific Islander",
+                     "Some Other Race Alone",                      
+                     "Two or More Races",                        
+                     "White Alone",                                
+                     "White Alone Not Hispanic or Latino"],
+       "Tenure": ["Total", "Renter Occupied", "Owner Occupied"],        
+       "Variable": ["Occupied Housing Units", "Margins of Error"]     
+     },     
+     {
        "Measure Type": ["Percent of Racial/Ethnic Subgroup"], 
        "Race/Ethnicity": ["American Indian and Alaska Native Alone",   
                      "Asian Alone",                                
