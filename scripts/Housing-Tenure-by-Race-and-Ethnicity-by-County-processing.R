@@ -1,0 +1,299 @@
+library(dplyr)
+library(acs)
+library(datapkg)
+library(tidyr)
+source('./scripts/acsHelpers.R')
+
+##################################################################
+#
+# Processing Script for Housing Tenure by Race and Ethnicity by County
+# Created by Jenna Daly
+# On 11/27/2017
+#
+##################################################################
+
+#Get state data
+geography=geo.make(state=09)
+yearlist=c(2010:2016)
+span = 5
+col.names="pretty" 
+key="ed0e58d2538fb239f51e01643745e83f380582d7"
+options(scipen=999)
+
+tables <- c("", "A", "B", "C", "D", "E", "F", "G", "H", "I")
+races <- c("All", "White Alone", "Black or African American Alone", "American Indian and Alaska Native Alone", 
+           "Asian Alone", "Native Hawaiian and Other Pacific Islander", "Some Other Race Alone", 
+           "Two or More Races", "White Alone Not Hispanic or Latino", "Hispanic or Latino")
+
+state_data <- data.table()
+for (i in seq_along(yearlist)) {
+  endyear = yearlist[i]
+  inter_data <- data.table()
+  for (j in seq_along(tables)) {
+    tbl <- tables[j]
+    race <- races[j]
+    variable =list()      
+    for (k in seq_along(1:3)) {
+     number = number=paste0("B25003", tbl, "_", sprintf("%03d",k))
+     variable = c(variable, number)
+     k=k+1
+    }  
+    variable <- as.character(variable)    
+    data <- acs.fetch(geography=geography, endyear=endyear, span=span, 
+                    variable = variable, key=key)
+    year <- data@endyear
+    print(paste("Processing: ", year, race))
+    year <- paste(year-4, year, sep="-")
+    geo <- data@geography
+    total <- data[,1]
+    acs.colnames(total) <- "Number:Total"
+    renter <- data[,3]
+    acs.colnames(renter) <- "Number:Renter Occupied"
+    percent.renter <- divide.acs(renter, total, method = "proportion")
+    acs.colnames(percent.renter) <- "Percent_Race:Renter Occupied"
+    owner <- data[,2]
+    acs.colnames(owner) <- "Number:Owner Occupied"
+    percent.owner <- divide.acs(owner, total, method = "proportion")
+    acs.colnames(percent.owner) <- "Percent_Race:Owner Occupied"
+     numberEstimates <- data.table(
+            geo, 
+            estimate(total),
+            estimate(renter),
+            estimate(owner),
+            year,
+            race,
+            "Number",
+            "Occupied Housing Units"
+        )
+    numberMOES <- data.table(
+            geo,
+            standard.error(total) * 1.645,
+            standard.error(renter) * 1.645,
+            standard.error(owner) * 1.645,
+            year,
+            race,
+            "Number",
+            "Margins of Error"
+        )
+    numberNames <- c(
+            "County", "FIPS",
+            "Number:Total",
+            "Number:Renter Occupied",
+            "Number:Owner Occupied",
+            "Year",
+            "Race/Ethnicity",
+            "Measure Type",
+            "Variable"
+         )
+    setnames(numberEstimates, numberNames)
+    setnames(numberMOES, numberNames)
+    numbersData.melt <- melt(
+            rbind(numberEstimates, numberMOES),
+            id.vars=c("County", "FIPS", "Year", "Measure Type", "Variable", "Race/Ethnicity"),
+            variable.name="Housing Units",
+            variable.factor = F,
+            value.name="Value",
+            value.factor = F
+         )
+    percentEstimates <- data.table(
+            geo,
+            estimate(percent.renter),
+            estimate(percent.owner),
+            year,
+            race,
+            "Percent",
+            "Occupied Housing Units"
+        )
+    percentMOES <- data.table(
+                geo,
+                standard.error(percent.renter) * 1.645,
+                standard.error(percent.owner) * 1.645,
+                year,
+                race,
+                "Percent",
+                "Margins of Error"
+            )
+    percentNames <- c(
+            "County", "FIPS",
+            "Percent_Race:Renter Occupied",
+            "Percent_Race:Owner Occupied",
+            "Year",
+            "Race/Ethnicity",
+            "Measure Type",
+            "Variable"
+         )
+    setnames(percentEstimates, percentNames)
+    setnames(percentMOES, percentNames)
+    percentData.melt <- melt(
+            rbind(percentEstimates, percentMOES),
+            id.vars=c("County", "FIPS", "Year", "Measure Type", "Variable", "Race/Ethnicity"),
+            variable.name="Housing Units",
+            variable.factor = F,
+            value.name="Value",
+            value.factor = F
+         )
+
+    inter_data <- rbind(inter_data, numbersData.melt, percentData.melt)
+  }
+  state_data <- rbind(state_data, inter_data)
+}
+
+#Get county data
+geography=geo.make(state=09, county="*")
+
+county_data <- data.table()
+for (i in seq_along(yearlist)) {
+  endyear = yearlist[i]
+  inter_data <- data.table()
+  for (j in seq_along(tables)) {
+    tbl <- tables[j]
+    race <- races[j]
+    variable =list()      
+    for (k in seq_along(1:3)) {
+     number = number=paste0("B25003", tbl, "_", sprintf("%03d",k))
+     variable = c(variable, number)
+     k=k+1
+    }  
+    variable <- as.character(variable)    
+    data <- acs.fetch(geography=geography, endyear=endyear, span=span, 
+                    variable = variable, key=key)
+    year <- data@endyear
+    print(paste("Processing: ", year, race))
+    year <- paste(year-4, year, sep="-")
+    geo <- data@geography
+    geo$NAME <- gsub(", Connecticut", "", geo$NAME)
+    geo$county <- gsub("^", "09", geo$county)
+    geo$state <- NULL
+    total <- data[,1]
+    acs.colnames(total) <- "Number:Total"
+    renter <- data[,3]
+    acs.colnames(renter) <- "Number:Renter Occupied"
+    percent.renter <- divide.acs(renter, total, method = "proportion")
+    acs.colnames(percent.renter) <- "Percent_Race:Renter Occupied"
+    owner <- data[,2]
+    acs.colnames(owner) <- "Number:Owner Occupied"
+    percent.owner <- divide.acs(owner, total, method = "proportion")
+    acs.colnames(percent.owner) <- "Percent_Race:Owner Occupied"
+     numberEstimates <- data.table(
+            geo, 
+            estimate(total),
+            estimate(renter),
+            estimate(owner),
+            year,
+            race,
+            "Number",
+            "Occupied Housing Units"
+        )
+    numberMOES <- data.table(
+            geo,
+            standard.error(total) * 1.645,
+            standard.error(renter) * 1.645,
+            standard.error(owner) * 1.645,
+            year,
+            race,
+            "Number",
+            "Margins of Error"
+        )
+    numberNames <- c(
+            "County", "FIPS",
+            "Number:Total",
+            "Number:Renter Occupied",
+            "Number:Owner Occupied",
+            "Year",
+            "Race/Ethnicity",
+            "Measure Type",
+            "Variable"
+         )
+    setnames(numberEstimates, numberNames)
+    setnames(numberMOES, numberNames)
+    numbersData.melt <- melt(
+            rbind(numberEstimates, numberMOES),
+            id.vars=c("County", "FIPS", "Year", "Measure Type", "Variable", "Race/Ethnicity"),
+            variable.name="Housing Units",
+            variable.factor = F,
+            value.name="Value",
+            value.factor = F
+         )
+    percentEstimates <- data.table(
+            geo,
+            estimate(percent.renter),
+            estimate(percent.owner),
+            year,
+            race,
+            "Percent",
+            "Occupied Housing Units"
+        )
+    percentMOES <- data.table(
+                geo,
+                standard.error(percent.renter) * 1.645,
+                standard.error(percent.owner) * 1.645,
+                year,
+                race,
+                "Percent",
+                "Margins of Error"
+            )
+    percentNames <- c(
+            "County", "FIPS",
+            "Percent_Race:Renter Occupied",
+            "Percent_Race:Owner Occupied",
+            "Year",
+            "Race/Ethnicity",
+            "Measure Type",
+            "Variable"
+         )
+    setnames(percentEstimates, percentNames)
+    setnames(percentMOES, percentNames)
+    percentData.melt <- melt(
+            rbind(percentEstimates, percentMOES),
+            id.vars=c("County", "FIPS", "Year", "Measure Type", "Variable", "Race/Ethnicity"),
+            variable.name="Housing Units",
+            variable.factor = F,
+            value.name="Value",
+            value.factor = F
+         )
+
+    inter_data <- rbind(inter_data, numbersData.melt, percentData.melt)
+  }
+  county_data <- rbind(county_data, inter_data)
+}
+
+tenure_data <- rbind(state_data, county_data)
+
+tenure_data[,c("Measure Type", "Tenure"):=do.call(Map, c(f=c, strsplit(`Housing Units`, ":", fixed=T)))]
+tenure_data[,`Housing Units` := NULL]
+
+# re-code the proportions to percent of state total so it is less confusing
+tenure_data$`Measure Type`[tenure_data$`Measure Type` == "Percent_Race" & tenure_data$`Race/Ethnicity` == "All"] <- "Percent_State"
+
+
+# Re-code measure types
+tenure_data[
+        `Measure Type` == "Percent_State",
+        `Measure Type` := "Percent of Total Housing Units"
+    ][
+        `Measure Type` == "Percent_Race",
+        `Measure Type` := "Percent of Racial/Ethnic Subgroup"
+    ]
+
+# Round Values according to type/variable
+tenure_data[`Measure Type` == "Number", Value := round(Value, 2)]
+tenure_data[`Measure Type` != "Number", Value := round(Value*100, 2)]
+tenure_data[Variable == "Margins of Error", Value := round(Value, 0)]
+
+tenure_data$Tenure <- factor(tenure_data$Tenure, levels = c("Total", "Owner Occupied", "Renter Occupied"))
+
+#Code NaNs to NAs
+tenure_data$Value[tenure_data$Value == "NaN"] <- NA
+
+#set final column order
+tenure_data <- tenure_data %>% 
+  select(County, FIPS, Year, `Race/Ethnicity`, Tenure, `Measure Type`, Variable, Value) %>% 
+  arrange(County, Year, `Race/Ethnicity`, Tenure, `Measure Type`, desc(Variable))
+
+write.table (
+  tenure_data,
+  file.path(getwd(), "data", "housing_tenure_race_county_2016.csv"),
+  sep = ",",
+  row.names = F,
+  na = "-9999"
+)
